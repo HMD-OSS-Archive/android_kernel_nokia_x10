@@ -527,13 +527,6 @@ struct himax_ts_data {
 #endif
 
     struct platform_device *tp_gesture_pdev; // ning.wei++
-
-#if defined(CONFIG_PM) && FTS_PATCH_COMERR_PM
-	struct completion pm_completion;
-	bool pm_suspend;
-#endif
-
-
 };
 
 struct himax_debug {

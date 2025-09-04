@@ -687,6 +687,9 @@ static const struct of_device_id spidev_dt_ids[] = {
 #if defined(TARGET_PRODUCT_PUNISHER)
 	{ .compatible = "qcom,spidevonly" },
 #endif
+#ifdef CONFIG_AUDIO_QGKI
+	{ .compatible = "qcom,spi-msm-codec-slave" },
+#endif
 	{},
 };
 MODULE_DEVICE_TABLE(of, spidev_dt_ids);

@@ -226,8 +226,8 @@ struct fp_dev_touch_info {
 #define BSP_SIL_POWER_SUPPLY_GPIO
 
 /* AVDD voltage range 2.8v ~ 3.3v */
-#define AVDD_MAX  2800000
-#define AVDD_MIN  2800000
+#define AVDD_MAX  3000000
+#define AVDD_MIN  3000000
 
 /* VDDIO voltage range 1.8v ~ AVDD */
 #define VDDIO_MAX 1800000

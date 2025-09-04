@@ -17,10 +17,10 @@
 #include "slot-gpio.h"
 
 //merged by changxue.fang for thething sdcard detect,20210317,start
-#if IS_ENABLED(CONFIG_HS_PRODUCT_DEVINFO) || IS_ENABLED(CONFIG_SDCARD_REPORT)
+#if IS_ENABLED(CONFIG_TTG_BOOT_INFO) || IS_ENABLED(CONFIG_SDCARD_REPORT)
 int sdcard_status_global = 0;
 EXPORT_SYMBOL(sdcard_status_global);
-#endif /* CONFIG_HS_PRODUCT_DEVINFO */
+#endif /* CONFIG_TTG_BOOT_INFO */
 /*sdcard_status_global's value is as follows:
 0: sdcard slot is not present
 1: sdcard slot is present
@@ -52,7 +52,7 @@ static irqreturn_t mmc_gpio_cd_irqt(int irq, void *dev_id)
 #endif
 //merged by changxue.fang for thething sdcard detect,20210317,start
 /*add start: add device node for getting status of TFCard holder in factory mode */
-#if IS_ENABLED(CONFIG_HS_PRODUCT_DEVINFO) || IS_ENABLED(CONFIG_SDCARD_REPORT)
+#if IS_ENABLED(CONFIG_TTG_BOOT_INFO) || IS_ENABLED(CONFIG_SDCARD_REPORT)
 	sdcard_status_global = mmc_gpio_get_cd(host);
 	printk(KERN_ERR "sdcard status:%d \n", sdcard_status_global);
 #endif
@@ -61,7 +61,7 @@ static irqreturn_t mmc_gpio_cd_irqt(int irq, void *dev_id)
 		sdcard_input();
 	else
 		sdcard_output();
-#endif /*CONFIG_HS_PRODUCT_DEVINFO */
+#endif /*CONFIG_TTG_BOOT_INFO */
 /*add end */
 //merged by changxue.fang for thething sdcard detect,20210317,end
 	host->trigger_card_event = true;
@@ -158,7 +158,7 @@ void mmc_gpiod_request_cd_irq(struct mmc_host *host)
 		host->caps |= MMC_CAP_NEEDS_POLL;
 	/*add start: add device node for getting status of TFCard holder in factory mode */
 //merged by changxue.fang for thething sdcard detect,20210317,start
-#if IS_ENABLED(CONFIG_HS_PRODUCT_DEVINFO) || IS_ENABLED(CONFIG_SDCARD_REPORT)
+#if IS_ENABLED(CONFIG_TTG_BOOT_INFO) || IS_ENABLED(CONFIG_SDCARD_REPORT)
 	sdcard_status_global = mmc_gpio_get_cd(host);
     printk("%s : sdcard_status_global =%d \n",__func__,sdcard_status_global);
 #endif

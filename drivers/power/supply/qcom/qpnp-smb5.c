@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
  */
 #if defined(SMT_VERSION) || defined(DEBUG_CHARGER)
 #ifndef DEBUG
@@ -140,7 +140,7 @@ static struct smb_params smb5_pm8150b_params = {
 		.reg    = USBIN_CURRENT_LIMIT_CFG_REG,
 		.min_u  = 0,
 		#if defined(TARGET_PRODUCT_PUNISHER)
-		.max_u  = 2000000,
+		.max_u  = 3000000,
 		#else
 		.max_u  = 5000000,
 		#endif
@@ -462,6 +462,9 @@ static int smb5_parse_dt_misc(struct smb5 *chip, struct device_node *node)
 
 	chg->sw_jeita_enabled = of_property_read_bool(node,
 				"qcom,sw-jeita-enable");
+
+	chg->jeita_arb_enable = of_property_read_bool(node,
+				"qcom,jeita-arb-enable");
 
 	chg->pd_not_supported = chg->pd_not_supported ||
 			of_property_read_bool(node, "qcom,usb-pd-disable");
@@ -883,14 +886,7 @@ static int smb5_usb_get_prop(struct power_supply *psy,
 		rc = smblib_get_prop_usb_present(chg, val);
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
-#ifdef SMT_VERSION
-		/* Online also needs to be 1 when charging is disable by runin.
-		 * This modification is only included in the SMT version.
-		 */
-		rc = smblib_get_prop_usb_present(chg, val);
-#else
 		rc = smblib_get_usb_online(chg, val);
-#endif
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
 		rc = smblib_get_prop_usb_voltage_max_design(chg, val);
@@ -969,6 +965,9 @@ static int smb5_usb_set_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
 		rc = smblib_set_prop_sdp_current_max(chg, val->intval);
 		break;
+	case POWER_SUPPLY_PROP_POWER_NOW:
+			chg->qc3p5_detected_mw = val->intval;
+		break;
 	default:
 		pr_err("Set prop %d is not supported in usb psy\n",
 				psp);
@@ -984,6 +983,7 @@ static int smb5_usb_prop_is_writeable(struct power_supply *psy,
 {
 	switch (psp) {
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
+	case POWER_SUPPLY_PROP_POWER_NOW:
 		return 1;
 	default:
 		break;
@@ -1251,6 +1251,9 @@ static int smb5_init_dc_psy(struct smb5 *chip)
 static enum power_supply_property smb5_batt_props[] = {
 	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
 	POWER_SUPPLY_PROP_STATUS,
+#ifdef CONFIG_HS_CHARGE_FG_FUNCTION
+	POWER_SUPPLY_PROP_CHARGER_TYPE,
+#endif /*CONFIG_HS_CHARGE_FG_FUNCTION*/
 	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_CHARGE_TYPE,
@@ -1293,6 +1296,11 @@ static int smb5_batt_get_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
 		rc = smblib_get_prop_input_suspend(chg, pval);
 		break;
+#ifdef CONFIG_HS_CHARGE_FG_FUNCTION
+	case POWER_SUPPLY_PROP_CHARGER_TYPE:
+		pval->intval = chg->real_charger_type;
+		break;
+#endif /*CONFIG_HS_CHARGE_FG_FUNCTION*/
 	case POWER_SUPPLY_PROP_CHARGE_TYPE:
 		rc = smblib_get_prop_batt_charge_type(chg, pval);
 		break;
@@ -1422,6 +1430,9 @@ static int smb5_batt_prop_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_STATUS:
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
 	case POWER_SUPPLY_PROP_CAPACITY:
+#ifdef CONFIG_HS_CHARGE_FG_FUNCTION
+	case POWER_SUPPLY_PROP_CHARGER_TYPE:
+#endif /*CONFIG_HS_CHARGE_FG_FUNCTION*/
 		return 1;
 	default:
 		break;
@@ -2419,7 +2430,7 @@ static int smb5_determine_initial_status(struct smb5 *chip)
 	chg->early_usb_attach = val.intval;
 
 	if (chg->iio_chan_list_qg)
-		smblib_suspend_on_debug_battery(chg);
+		smblib_config_charger_on_debug_battery(chg);
 
 	smb5_usb_plugin_irq_handler(0, &irq_data);
 	smb5_dc_plugin_irq_handler(0, &irq_data);

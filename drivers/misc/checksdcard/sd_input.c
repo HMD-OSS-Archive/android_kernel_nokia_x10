@@ -32,8 +32,8 @@
 #include <linux/of_gpio.h>
 #endif
 
-#define KEY_SD_IN  402
-#define KEY_SD_OUT 403
+#define KEY_SD_IN  750
+#define KEY_SD_OUT 751
 
 struct sdpin_proc_data {
 	struct device *dev;

@@ -94,7 +94,7 @@ config ST21NFC
 	help
 	  ST St54j near field communtion controller support
 config NFC_ST54J_SE
-	bool "NFC eSE driver for ST ST54J using NFC_ST21NFC"
+	tristate "NFC eSE driver for ST ST54J using NFC_ST21NFC"
 	depends on I2C
 	depends on SPI
 	depends on ST21NFC

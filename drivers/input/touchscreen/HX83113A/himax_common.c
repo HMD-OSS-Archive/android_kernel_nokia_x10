@@ -3215,11 +3215,6 @@ found_hx_chip:
 
 	ts->initialized = true;
 
-#if defined(CONFIG_PM) && FTS_PATCH_COMERR_PM
-    init_completion(&ts->pm_completion);
-    ts->pm_suspend = false;
-#endif
-
 #if defined(HX_CONFIG_FB) || defined(HX_CONFIG_DRM)
 	ts->himax_att_wq = create_singlethread_workqueue("HMX_ATT_request");
 	if (!ts->himax_att_wq) {

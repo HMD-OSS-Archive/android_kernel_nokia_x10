@@ -709,7 +709,7 @@ static int silfp_keyevent(struct silfp_data	*fp_dev, struct fp_dev_key_t *pkey)
 static int silfp_proc_show(struct seq_file *m, void *v)
 {
     //add fp message by he.zhou@archermind.com for factory apk test begin
-    seq_printf(m, "P660-FP-driver-v0.3.5 ic:%s\n", vendor_name);
+    seq_printf(m, "sileadFP-P660-FP-driver-v0.3.5 ic:%s\n", vendor_name);
     //add fp message by he.zhou@archermind.com end
     return 0;
 }

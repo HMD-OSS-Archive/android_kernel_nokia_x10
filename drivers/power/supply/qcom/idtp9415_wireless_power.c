@@ -56,6 +56,7 @@ struct p9415_dev {
 	struct power_supply		*dc_psy;
 	struct power_supply		*battery_psy;
 	struct delayed_work	idt_status_change_work;
+	struct delayed_work	vrect_check_work;
 	struct notifier_block	nb;
 	bool   dc_online;
 	bool   dc_9v_online;
@@ -63,6 +64,7 @@ struct p9415_dev {
 	int   soc;
 	int   input_max_current_ua;
 	struct votable		*fcc_votable;
+	int   irq_gpio;
 };
 
 int idtp9415_read(struct p9415_dev *di, u16 reg, u8 *val) {
@@ -493,8 +495,10 @@ static const struct regmap_config p9415_regmap_config = {
 #define IDT_REG_VOUT_HIGH 0x3f
 #define VOUT_9V_HIGH_THER 9500
 #define VOUT_9V_LOW_THER 5500
-#define CURRENT_12V_UA 2000000
-#define CURRENT_5V_UA   1000000
+#define CURRENT_12V_UA 3000000
+#define CURRENT_5V_UA   2000000
+#define LIMIT_CURRENT_UA   900000
+
 #define DEFAULT_CURRENT_UA 500000
 #define is_between(left, right, value) \
 		(((left) >= (right) && (left) >= (value) \
@@ -523,49 +527,47 @@ struct range_data current_5v_tab[] =
 
 static int idt_set_input_current(struct p9415_dev *chip)
 {
-	static int setted_current_ua = 0, setted_limit_current_ua = 0;
 	union power_supply_propval pval = {0, };
 	int current_ua = 0, limit_current_ua = 0,rc = 0;
 
+	pr_err("%s dc_online = %d,dc_9v_or_12v_online=%d\n",__func__,
+		chip->dc_online,chip->dc_9v_or_12v_online);
 	if(chip->dc_online){
 		if(chip->dc_9v_or_12v_online){
 			current_ua =  CURRENT_12V_UA;
 		} else {
 			current_ua =  CURRENT_5V_UA;
 		}
-	} else {
-		current_ua = DEFAULT_CURRENT_UA;
+
+		limit_current_ua = LIMIT_CURRENT_UA;
 	}
-		limit_current_ua = CURRENT_5V_UA;
 	if((chip->input_max_current_ua > 0) && (limit_current_ua > chip->input_max_current_ua) )
 		limit_current_ua = chip->input_max_current_ua;
 	if(current_ua < DEFAULT_CURRENT_UA)
 		current_ua = DEFAULT_CURRENT_UA;
 
-	if(limit_current_ua != setted_limit_current_ua){
-		pval.intval = limit_current_ua;
-		pr_err("%s set dc icl current = %d\n",__func__,limit_current_ua);
-		rc = power_supply_set_property(chip->dc_psy,
-				       POWER_SUPPLY_PROP_CURRENT_MAX, &pval);
-		if (rc < 0) {
-			pr_err("Couldn't set dc current_max rc=%d\n",
-					rc);
-			return false;
-		}
-		setted_limit_current_ua = limit_current_ua;
+	pr_err("%s limit_current_ua = %d/\n",__func__,limit_current_ua);
+
+	pval.intval = limit_current_ua;
+	pr_err("%s set dc icl current = %d\n",__func__,limit_current_ua);
+	rc = power_supply_set_property(chip->dc_psy,
+				      POWER_SUPPLY_PROP_CURRENT_MAX, &pval);
+	if (rc < 0) {
+		pr_err("Couldn't set dc current_max rc=%d\n",
+				rc);
+		return false;
 	}
-	if(current_ua != setted_current_ua){
-		pval.intval = current_ua;
-		pr_err("%s set dc fcc current = %d\n",__func__,current_ua);
-		rc = power_supply_set_property(chip->dc_psy,
-				       POWER_SUPPLY_PROP_CURRENT_MAX, &pval);
-		if (rc < 0) {
-			pr_err("Couldn't set dc current_max rc=%d\n",
-					rc);
-			return false;
-		}
+
+	pr_err("%s current_ua = %d\n",__func__,current_ua);
+	pval.intval = current_ua;
+	pr_err("%s set dc fcc current = %d\n",__func__,current_ua);
+	rc = power_supply_set_property(chip->dc_psy,
+				      POWER_SUPPLY_PROP_CURRENT_MAX, &pval);
+	if (rc < 0) {
+		pr_err("Couldn't set dc current_max rc=%d\n",
+				rc);
+		return false;
 		vote(chip->fcc_votable, DC_LIMIT_VOTER, true , current_ua);
-		setted_current_ua = current_ua;
 	}
     return rc;
 }
@@ -574,14 +576,18 @@ static int idt_set_input_current(struct p9415_dev *chip)
 static int idt_set_fod_data(struct p9415_dev *di)
 {
 	int rc = 0;
-	u8 fod_data_5v[12] = {0xaa,0x30,0x88,0x38,0x82,0x43,0x96,0x20,0xaa,0xe6,0x85,0x70};
-	u8 fod_data_9v[12] = {0x9a,0x02,0x89,0x0d,0x89,0x0f,0x89,0x1d,0x8c,0x25,0x90,0x38};
 
-	rc = idtp9415_write_buffer(di,0x68,di->dc_9v_online?fod_data_9v:fod_data_5v,12);
+	u8 fod_data_5v[12] = {0x98,0x38,0x48,0x7f,0x7e,0x44,0x98,0x1e,0x9c,0x13,0xaa,0xe4};
+	u8 fod_data_9v[12] = {0x98,0x38,0x48,0x7c,0x6a,0x78,0x9c,0x2,0x9c,0x11,0xa2,0xf0};
+
+	if(di->dc_9v_or_12v_online)
+		rc = idtp9415_write_buffer(di,0x68,fod_data_9v,12);
+	else
+		rc = idtp9415_write_buffer(di,0x68,fod_data_5v,12);
 
     return rc;
 }
-#endif
+
 static int idt_reset_system_level(struct p9415_dev *chip)
 {
 	int rc = 0;
@@ -602,12 +608,11 @@ static int idt_reset_system_level(struct p9415_dev *chip)
 
     return rc;
 }
-
+#endif
 int dc_vbus_mv =0;
 EXPORT_SYMBOL(dc_vbus_mv);
 int get_dc_vout(struct p9415_dev *chip)
 {
-	int rc = 0;
 	u8 vout_data_low = 0, vout_data_high = 0;
 	u16 vout_data = 0;
 
@@ -616,14 +621,38 @@ int get_dc_vout(struct p9415_dev *chip)
 	vout_data = (vout_data_high << 8) |vout_data_low;
 	dc_vbus_mv = vout_data  * 84 / 10 + 2800;
 	pr_err("idt handler dc in vbus_mv %d\n", dc_vbus_mv);
-	return rc;
+	return dc_vbus_mv;
 }
+#if 0
+int get_dc_cur_vout(struct p9415_dev *chip)
+{
+	u8 vout_data_low = 0, vout_data_high = 0;
+	u16 vout_data = 0;
 
+	idtp9415_read(chip,0x7c,&vout_data_low);
+	idtp9415_read(chip,0x7d,&vout_data_high);
+	vout_data = (vout_data_high << 8) |vout_data_low;
+	pr_err("idt handler dc current  vbus_mv %d\n", vout_data);
+	return vout_data;
+}
+#endif
+int get_dc_vrect_vout(struct p9415_dev *chip)
+{
+	u8 vout_data_low = 0, vout_data_high = 0;
+	u16 vout_data = 0;
+
+	pr_err("idt handler dc current \n");
+	idtp9415_read(chip,0x7e,&vout_data_low);
+	idtp9415_read(chip,0x7f,&vout_data_high);
+	vout_data = (vout_data_high << 8) |vout_data_low;
+	pr_err("idt handler dc current  vrect %d\n", vout_data);
+	return vout_data;
+}
 static int idt_set_dc_status(struct p9415_dev *chip, bool is_dc_online, int soc)
 {
 	int rc = 0,vbus_mv = 0,icl_ma = 0;
 	u8 ilimt_data = 0;
-	u16 vout_data = 0;
+	u8 fod_data_5v[12] = {0x98,0x38,0x48,0x7f,0x7e,0x44,0x98,0x1e,0x9c,0x13,0xaa,0xe4};
 
 	if(chip->dc_online != is_dc_online) {
 		chip->dc_online = is_dc_online;
@@ -631,31 +660,72 @@ static int idt_set_dc_status(struct p9415_dev *chip, bool is_dc_online, int soc)
 		pr_err("idt online change %d,soc %d\n",chip->dc_online, soc);
 		if(is_dc_online){
 			idtp9415_read(chip,IDT_REG_ILIMT,&ilimt_data);
+			vbus_mv =get_dc_vout(chip);
+			//vbus_mv = get_dc_cur_vout(chip);
+			pr_err("idt vbus_mv=%d\n",vbus_mv );
+			if(vbus_mv > 9000){
+				rc = idtp9415_write(chip,0x68, 0x88);
+				if (rc) {
+					pr_err("Couldn't write 0x68 \n");
+				}
+				rc = idtp9415_write(chip,0x69, 0x73);
+				if (rc) {
+					pr_err("Couldn't write 0x69 \n");
+				}
+				rc = idtp9415_write(chip,0x3e, 0xe2);
+				if (rc) {
+					pr_err("Couldn't write 0x3e \n");
+				}
+				rc = idtp9415_write(chip,0x3f, 0x02);
+				if (rc) {
+					pr_err("Couldn't write 0x3f \n");
+				}
 			get_dc_vout(chip);
-			vbus_mv = dc_vbus_mv;
+			schedule_delayed_work(&chip->vrect_check_work,0);
+			}else {
+				pr_err("idt 5v ok\n" );
+				chip->dc_9v_or_12v_online = false;
+				rc = idtp9415_write_buffer(chip,0x68,fod_data_5v,12);
+				idt_set_input_current(chip);
+			}
+
 			icl_ma = ilimt_data*100 + 100;
-			pr_err("idt handler dc in,soc %d vbus_mv %d, icl_ma %d vout_data =%x,ilimt_data=%x\n",
-				soc, vbus_mv, icl_ma,vout_data,ilimt_data);
+			pr_err("idt handler dc in,soc %d vbus_mv %d, icl_ma %d ,ilimt_data=%x\n",
+				soc, vbus_mv, icl_ma,ilimt_data);
 			chip->input_max_current_ua = icl_ma*1000;
 			if(icl_ma*1000 < DEFAULT_CURRENT_UA)
 				chip->input_max_current_ua = DEFAULT_CURRENT_UA;
-			if(vbus_mv > VOUT_9V_LOW_THER){
-				chip->dc_9v_or_12v_online = true;
-			} else {
-				chip->dc_9v_or_12v_online = false;
-			}
-			//idt_set_fod_data(chip);
 		} else {
 			pr_err("idt handler dc out,soc %d\n", chip->soc );
-			chip->input_max_current_ua = DEFAULT_CURRENT_UA;
-			chip->dc_9v_or_12v_online = false;
+			cancel_delayed_work_sync(&chip->vrect_check_work);
 		}
-		idt_set_input_current(chip);
-		idt_reset_system_level(chip);
+
 	}
     return rc;
 }
+static void vrect_check_work(struct work_struct *work)
+{
+	struct p9415_dev *chip = container_of(work,
+			struct p9415_dev, vrect_check_work.work);
+	u8 fod_data_9v[12] = {0x98,0x38,0x48,0x7c,0x6a,0x78,0x9c,0x2,0x9c,0x11,0xa2,0xf0};
+	u16 vrect = 0;
+	int rc;
 
+	pr_err("idt vrect_check_work \n" );
+	vrect = get_dc_vrect_vout(chip);
+
+	if(vrect < 10000 && vrect >VOUT_9V_LOW_THER){
+		pr_err("idt set 9v ok\n" );
+		rc = idtp9415_write_buffer(chip,0x68,fod_data_9v,12);
+		chip->dc_9v_or_12v_online = true;
+		idt_set_input_current(chip);
+		//idt_reset_system_level(chip);
+	}
+	else{
+		pr_err("idt vrect_check ok\n" );
+		schedule_delayed_work(&chip->vrect_check_work,msecs_to_jiffies(500));
+	}
+}
 static int battery_notifier_call(struct notifier_block *nb,
 		unsigned long ev, void *v)
 {
@@ -705,11 +775,45 @@ static void idt_status_change_work(struct work_struct *work)
 	} else {
 		soc = pval.intval;
 	}
+	pr_err("%s online=%d\n", __func__,online);
 	idt_set_dc_status(chip, online, soc);
 }
 
+static irqreturn_t idt_pgood_irq(int irq, void *data)
+{
+	struct p9415_dev *chip = data;
+	u8 fod_data1 ,fod_data2, val;
+	int rc =0, epp =0;
+
+	idtp9415_read(chip,0x4d,&val);
+	epp = val & BIT(3);
+	pr_err("idt_pgood_irq data=0x%x,epp=%d\n",val,epp);
+
+	if(epp){
+		rc = idtp9415_write(chip,0x76, 0x88);
+		if (rc) {
+			pr_err("Couldn't write 0x76 \n");
+		}else
+			pr_err("write 0x76 done\n");
+
+		rc = idtp9415_write(chip,0x77, 0x73);
+		if (rc) {
+			pr_err("Couldn't write 0x77 \n");
+		}else
+			pr_err("write 0x77 done\n");
+
+		idtp9415_read(chip,0x76,&fod_data1);
+		idtp9415_read(chip,0x77,&fod_data2);
+		pr_err("idt_pgood_irq fod_data1 = %x,fod_data2 = %x\n",
+			fod_data1,fod_data2);
+	}else
+		pr_err("5v do not config\n");
+
+	return IRQ_HANDLED;
+}
 static int p9415_probe(struct i2c_client *client, const struct i2c_device_id *id) {
     struct p9415_dev *chip;
+    struct device_node *np = client->dev.of_node;
     int rc = 0;
 
     pr_err("IDTP9415 probe.\n");
@@ -753,6 +857,7 @@ static int p9415_probe(struct i2c_client *client, const struct i2c_device_id *id
         fast_charging(9000);
 #endif
 	INIT_DELAYED_WORK(&chip->idt_status_change_work, idt_status_change_work);
+	INIT_DELAYED_WORK(&chip->vrect_check_work, vrect_check_work);
 	chip->nb.notifier_call = battery_notifier_call;
 	rc = power_supply_reg_notifier(&chip->nb);
 	if (rc < 0) {
@@ -770,6 +875,31 @@ static int p9415_probe(struct i2c_client *client, const struct i2c_device_id *id
 		rc = -EINVAL;
 		pr_err("IDTP9415 Couldn't find FCC votable rc=%d\n", rc);
 		return rc;
+	}
+
+	chip->irq_gpio = of_get_named_gpio(np, "irq-gpio", 0);
+	if (chip->irq_gpio < 0)
+		pr_err("%s: no irq gpio provided.\n", __func__);
+	else
+		pr_err( "%s: irq gpio provided ok.\n", __func__);
+
+	if (gpio_is_valid(chip->irq_gpio)) {
+		rc = devm_gpio_request_one(&client->dev, chip->irq_gpio,
+					    GPIOF_DIR_IN, "idt_pgood");
+		if (rc) {
+			pr_err( "%s:idt_pgood request failed\n",
+				__func__);
+			return rc;
+		}
+
+		rc = devm_request_threaded_irq(&client->dev,
+						gpio_to_irq(chip->irq_gpio),
+						NULL, idt_pgood_irq, IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+						"idtp9415", chip);
+		if (rc < 0) {
+			pr_err("idt Couldn't request irq\n");
+			return rc;
+		}
 	}
 
     pr_err("IDTP9415 probed successfully\n");
