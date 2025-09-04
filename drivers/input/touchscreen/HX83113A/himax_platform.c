@@ -15,7 +15,6 @@
 
 #include "himax_platform.h"
 #include "himax_common.h"
-#include <linux/power_supply.h>
 
 #if defined(HX_CONFIG_DRM)
 struct drm_panel *active_panel;
@@ -24,12 +23,6 @@ struct drm_panel *active_panel;
 int i2c_error_count;
 bool ic_boot_done;
 struct spi_device *spi;
-
-#if defined(HX_USB_DETECT_GLOBAL)
-bool USB_flag;
-EXPORT_SYMBOL(USB_flag);
-#endif
-
 
 static uint8_t *gBuffer;
 static uint8_t *g_read_xfer_data;
@@ -1122,62 +1115,6 @@ int drm_notifier_callback(struct notifier_block *self,
 		E("FB BLANK(%d) do not need process\n", *blank);
 		break;
 	}
-
-	return 0;
-}
-#endif
-
-#if defined(HX_USB_DETECT_GLOBAL)
-int usb_notifier_callback(struct notifier_block *nb, unsigned long evt, void *ptr)
-{
-
-	struct power_supply *usb_psy;
-        struct power_supply *pc_psy;
-        union power_supply_propval val = {0};
-        union power_supply_propval val_pc = {0};
-
-	struct himax_ts_data *ts = container_of(nb, struct himax_ts_data, usb_notif);
-
-	if (!ts->usb_psy || !ts->pc_psy ) {
-		ts->usb_psy = power_supply_get_by_name("usb");
-		ts->pc_psy = power_supply_get_by_name("pc_port");
-	}
-
-	if ((ptr != ts->usb_psy && ptr != ts->pc_psy)  || evt != PSY_EVENT_PROP_CHANGED) {
-		return 0;	
-	}
-	
-
-	usb_psy = power_supply_get_by_name("usb");
-	pc_psy = power_supply_get_by_name("pc_port");
-        if (!usb_psy) {
-                I("Could not get USB power_supply\n");
-        }
-        if (usb_psy) {
-                if (!power_supply_get_property(usb_psy,POWER_SUPPLY_PROP_ONLINE, &val)) {
-                        //connect_status  =  val.intval;
-                        //I("%s: USB connect_status=: %d\n", __func__,connect_status);
-                } 
-        }
-        
-       
-        if (!pc_psy) {
-                I("Could not get PC power_supply\n");
-        }
-        if (pc_psy) {
-                if (!power_supply_get_property(pc_psy,POWER_SUPPLY_PROP_ONLINE, &val_pc)){
-                        //connect_status  =  val_pc.intval;
-                        //I("%s: PC connect_status=: %d\n", __func__,connect_status);
-                }
-        }
-
-
-	if (val.intval == 0 && val_pc.intval == 0){
-		USB_flag  =  0;
-	} else {
-		USB_flag  =  1;
-	}
-
 
 	return 0;
 }

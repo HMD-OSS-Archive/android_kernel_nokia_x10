@@ -67,9 +67,9 @@ int gf_parse_dts(struct gf_dev *gf_dev)
 	pr_info("zlister pwr=%d, reset=%d, irq=%d\n", gf_dev->pwr_gpio, gf_dev->reset_gpio, gf_dev->irq_gpio);
 	return rc;
 err_irq:
-	//devm_gpio_free(dev, gf_dev->reset_gpio);
+	devm_gpio_free(dev, gf_dev->reset_gpio);
 err_reset:
-	//devm_gpio_free(dev, gf_dev->pwr_gpio);
+	devm_gpio_free(dev, gf_dev->pwr_gpio);
 err_pwr:
 	return rc;
 }

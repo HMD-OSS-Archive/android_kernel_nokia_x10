@@ -21,6 +21,9 @@
 #include <linux/rcupdate.h>	/* rcu_expedited and rcu_normal */
 
 #ifdef TARGET_PRODUCT_PUNISHER
+int lcd_type = 0;
+EXPORT_SYMBOL(lcd_type);
+
 #include <linux/mmc/mmc.h>
 #include <linux/mm.h>
 #endif
@@ -187,6 +190,7 @@ static ssize_t rcu_normal_store(struct kobject *kobj,
 KERNEL_ATTR_RW(rcu_normal);
 #endif /* #ifndef CONFIG_TINY_RCU */
 
+
 #ifdef CONFIG_SUPPORT_RESTART_MODEM
 static ssize_t restart_modem_show(struct kobject *kobj,
 				       struct kobj_attribute *attr, char *buf)
@@ -212,6 +216,7 @@ static ssize_t restart_modem_store(struct kobject *kobj,
 KERNEL_ATTR_RW(restart_modem);
 #endif
 
+
 #ifdef TARGET_PRODUCT_PUNISHER
 int wallpaper_ID;
 static ssize_t wallpaper_ID_show(struct kobject *kobj,
@@ -229,6 +234,25 @@ static ssize_t wallpaper_ID_store(struct kobject *kobj,
 	return count;
 }
 KERNEL_ATTR_RW(wallpaper_ID);
+
+static ssize_t info_lcd_show(struct kobject *kobj,
+			       struct kobj_attribute *attr, char *buf)
+{
+	char fts_name[32] = "fts_name not found";
+	if(lcd_type == 1)
+	{
+		 snprintf(fts_name, sizeof(fts_name), "ft8006s lcd 720 1640");
+	}
+
+	return sprintf(buf, "%s\n", fts_name);
+}
+static ssize_t info_lcd_store(struct kobject *kobj,
+				struct kobj_attribute *attr,
+				const char *buf, size_t count)
+{
+	return count;
+}
+KERNEL_ATTR_RW(info_lcd);
 
 static ssize_t info_ram_show(struct kobject *kobj,
 			       struct kobj_attribute *attr, char *buf)
@@ -288,6 +312,7 @@ static struct bin_attribute notes_attr __ro_after_init  = {
 struct kobject *kernel_kobj;
 EXPORT_SYMBOL_GPL(kernel_kobj);
 
+
 static struct attribute * kernel_attrs[] = {
 	&fscaps_attr.attr,
 	#ifdef CONFIG_SUPPORT_RESTART_MODEM
@@ -314,6 +339,7 @@ static struct attribute * kernel_attrs[] = {
 #endif
 #ifdef TARGET_PRODUCT_PUNISHER
 	&wallpaper_ID_attr.attr,
+	&info_lcd_attr.attr,
 	&info_ram_attr.attr,
 #endif
 	NULL

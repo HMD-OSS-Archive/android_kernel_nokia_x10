@@ -1431,7 +1431,7 @@ static bool is_usb_available(struct ttf *ttf)
 		return false;
 	return true;
 }
-
+/*
 static bool is_batt_available(struct  ttf *ttf)
 {
 	if (!ttf->batt_psy)
@@ -1441,9 +1441,8 @@ static bool is_batt_available(struct  ttf *ttf)
 		return false;
 
 	return true;
-}
+}*/
 #endif /*CONFIG_HS_CHARGE_FG_FUNCTION*/
-
 #define DELTA_TTF_IBATT_UA      500000
 static void ttf_work(struct work_struct *work)
 {
@@ -1453,10 +1452,9 @@ static void ttf_work(struct work_struct *work)
 		msoc = 0, charge_done;
 	ktime_t ktime_now;
 #ifdef CONFIG_HS_CHARGE_FG_FUNCTION
-	int batt_temp = 0, rbatt = 0, vbus = 0,charge_type = 0;
+	int batt_temp = 0, rbatt = 0, vbus = 0;
 	union power_supply_propval prop = {0, };
 #endif /*CONFIG_HS_CHARGE_FG_FUNCTION*/
-
 	mutex_lock(&ttf->lock);
 	rc =  ttf->get_ttf_param(ttf->data, TTF_CHG_STATUS, &charge_status);
 	if (rc < 0) {
@@ -1505,13 +1503,13 @@ static void ttf_work(struct work_struct *work)
 					POWER_SUPPLY_PROP_VOLTAGE_NOW, &prop);
 		vbus = prop.intval;
 	}
-        
+        /*
 	if (is_batt_available(ttf)){
 		power_supply_get_property(ttf->batt_psy,
 					POWER_SUPPLY_PROP_CHARGER_TYPE, &prop);
 		charge_type = prop.intval;
 	}
-        
+        */
 
 	rc = ttf->get_ttf_param(ttf->data, TTF_MSOC, &msoc);
 	if (rc < 0) {
@@ -1526,8 +1524,8 @@ static void ttf_work(struct work_struct *work)
 		pr_err("Error in getting rbatt, rc=%d\n", rc);
 	}
 
-	pr_err("vbus=%d, charge_type=%d, ibatt_now=%d, vbatt_now=%d, capacity=%d, temp=%d, charge_status=%d, rbatt=%d\n",
-		vbus, charge_type, ibatt_now, vbatt_now, msoc, batt_temp, charge_status, rbatt);
+	pr_err("vbus=%d, ibatt_now=%d, vbatt_now=%d, capacity=%d, temp=%d, charge_status=%d, rbatt=%d\n",
+		vbus, ibatt_now, vbatt_now, msoc, batt_temp, charge_status, rbatt);
 #endif /*CONFIG_HS_CHARGE_FG_FUNCTION*/
 
 	if (charge_status == POWER_SUPPLY_STATUS_CHARGING) {
